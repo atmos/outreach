@@ -1,0 +1,73 @@
+
+<html>
+  <head>
+    <script src="http://code.jquery.com/jquery.js"></script>
+    <script src="jquery.twitter.min.js"></script>
+    <style type="text/css">
+      body {background: #333; font-size: 64px; color: #999}
+      .twitter-posts {padding: 10px; list-style-type:none; border-bottom: 1px solid #000;}
+      .twitter-posts a {text-decoration:none; color: #FFF;}
+    </style>
+    <script type="text/javascript">
+      $(function(){
+
+          var displayTweets = function(tweet_data, loud_authors){
+          $.each(tweet_data, function(author, tweet){
+            if (loud_authors.indexOf(author) >= 0){
+             console.log(tweet);
+                $('#loud-tweets').append($("<li>", {
+                 "class": "twitter-posts",
+                 html: "<div class='name'>" + name + "</div><a href='http://twitter.com/" + tweet.from_user + "' class='profile'>@" + tweet.from_user + "</a> says...<div class='tweet'><a href='http://twitter.com/" + tweet.from_user + "/status/" + tweet.id_str + "'>" + tweet.text + "</a></div>"}));
+              };
+            });
+          };
+
+          var displayLoudTweets = function(){
+            searchForTweets(buildTweetData);
+          };
+
+          var findLoudAuthors = function(tweet_data){
+            loud_authors = [];
+            authors = Object.keys(tweet_data);
+            url = "http://api.twitter.com/1/users/lookup.json?callback=?&screen_name=";
+            $.getJSON(url + authors.join(), function(profiles){
+                $.each(profiles, function(count, author){
+                if (author.followers_count > 5000){
+                  loud_authors.push(author.screen_name);
+                };
+                });
+                displayTweets(tweet_data, loud_authors);
+            });
+          };
+
+          var buildTweetData = function(tweets){
+            tweet_data = {};
+            $.each(tweets, function(num, tweet) {
+              tweet_data[tweet.from_user] = tweet;
+              });
+            findLoudAuthors(tweet_data);
+          };
+
+          var searchForTweets = function(callback, filter){
+            $.twitter({limit: 1000, retweets: false, q: '@github'}, function(tweets){
+                var musings = tweets.results;
+                var batches_of_tweets = [];
+                while (musings.length) {
+                  batches_of_tweets.push(musings.splice(0,100));
+                }
+                $.each(batches_of_tweets, function(id, batch){
+                  callback(batch);
+                });
+            });
+          };
+
+        displayLoudTweets();
+
+       });
+    </script>
+  </head>
+  <body>
+    Loud tweets about @GitHub...
+    <div id="loud-tweets"></div>
+  </body>
+</html>
