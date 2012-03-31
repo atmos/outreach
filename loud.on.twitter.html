@@ -67,10 +67,20 @@
       _idCache: {},
 
       addTweet: function(tweet) {
-        var id = tweet.get("id");
+        var  id  = tweet.get("id")
+          , self = this
+          , url  = "http://api.twitter.com/1/users/lookup.json?callback=?&screen_name=";
 
         if (typeof this._idCache[id] === "undefined") {
-          this.unshiftObject(tweet);
+          $.getJSON(url + tweet.from_user, function(profiles) {
+            $.each(profiles, function(count, author) {
+              if (author.followers_count > 1000) {
+                self.unshiftObject(tweet)
+              }
+            })
+          })
+
+          // cache it so we don't look it up again
           this._idCache[id] = tweet.id;
         }
       },
