@@ -1,7 +1,7 @@
-
 <html>
   <head>
     <script src="http://code.jquery.com/jquery.js"></script>
+    <!-- jQuery Twitter API plugin from https://github.com/boazsender/jQuery-Twitter-Plugin -->
     <script src="jquery.twitter.min.js"></script>
     <style type="text/css">
       body {background: #333; font-size: 64px; color: #999}
@@ -11,6 +11,7 @@
     <script type="text/javascript">
       $(function(){
 
+          // note: use mustache for this
           var displayTweets = function(tweet_data, loud_authors){
           $.each(tweet_data, function(author, tweet){
             if (loud_authors.indexOf(author) >= 0){
