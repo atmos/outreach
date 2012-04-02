@@ -21,7 +21,8 @@
       <ul>
       {{#each Twitter.searchResults}}
         <li class="twitter-posts">
-          <a href="{{unbound userLink}}" class="profile">@{{from_user}}</a> <a href="{{unbound tweetLink}}">says...</a>
+          <img src="{{unbound avatar}}" alt="{{unbound from_user}}" />
+          <a href="{{unbound userLink}}" class="profile">@{{from_user}}({{followers}})</a> <a href="{{unbound tweetLink}}">says...</a>
           <div class="tweet">{{{tweetText}}}</div>
         </li>
       {{/each}}
@@ -31,24 +32,63 @@
   <script src="http://code.jquery.com/jquery.js"></script>
   <script src="js/twitter-text.min.js"></script>
   <script src="js/ember-0.9.5.min.js"></script>
+  <script src="js/ember/data.js"></script>
+  <script src="js/ember/localStorage.js"></script>
   <script>
     // Namespace
     Twitter = Em.Application.create({
       ready: function() {
         // Polling
         setInterval(function() {
-          Twitter.searchResults.refresh();
-        }, 2000);
+          Twitter.searchResults.refresh()
+        }, 2000)
 
-        Twitter.searchResults.set("query", "@github");
-        
-        this._super();
+        Twitter.searchResults.set("query", "@github")
+
+        this._super()
       }
+    })
+    // Persistence
+    Twitter.store = DS.Store.create({
+      adapter:  DS.localStorageAdapter.create({bulkCommit: true}),
+      revision: 4
     });
 
-    // Model
+    Twitter.findUser = function(name) {
+      var user  = null
+        , users = Twitter.store.findAll(Twitter.User)
+
+      users.forEach(function(u) {
+        if(u.get("screen_name") == name) {
+          user = u
+        }
+      })
+      if(user) {
+        return user
+      } else {
+        var url  = "http://api.twitter.com/1/users/lookup.json?callback=?&screen_name="
+        $.getJSON(url + name, function(profiles) {
+          $.each(profiles, function(count, author) {
+            user = Twitter.store.createRecord(Twitter.User, author)
+            Twitter.store.commit()
+            return user
+          })
+        })
+      }
+    }
+
+    //// Models
+    Twitter.User = DS.Model.extend({
+      name:            DS.attr('string'),
+      followers_count: DS.attr('integer'),
+
+      link: function() {
+        return ("https://twitter.com/" + this.get("screen_name"))
+      }.property(),
+    })
+
     Twitter.Tweet = Em.Object.extend({
-      userLink: function() {
+      link: function() {
         return ("https://twitter.com/" + this.get("from_user"))
       }.property(),
       tweetLink: function() {
@@ -56,31 +96,36 @@
       }.property(),
       tweetText: function() {
         return twttr.txt.autoLink(this.get("text"))
+      }.property(),
+      user: function() {
+        return Twitter.findUser(this.get("from_user"))
+      },
+      followers: function() {
+        return this.user().get("followers_count")
+      }.property(),
+      avatar: function() {
+        return this.user().get("profile_image_url")
       }.property()
     });
     // Collection
     Twitter.searchResults = Em.ArrayController.create({
-      content: [],
-
       query: null,
-
+      content: [],
       _idCache: {},
 
       addTweet: function(tweet) {
-        var  id  = tweet.get("id")
+        var   id = tweet.get("id")
           , self = this
-          , url  = "http://api.twitter.com/1/users/lookup.json?callback=?&screen_name=";
 
         if (typeof this._idCache[id] === "undefined") {
-          $.getJSON(url + tweet.from_user, function(profiles) {
-            $.each(profiles, function(count, author) {
-              if (author.followers_count > 1000) {
-                self.unshiftObject(tweet)
-              }
-            })
-          })
+          var user = Twitter.findUser(tweet.get("from_user"))
+          if(user) {
+            console.log(tweet.get("from_user") + " : " + user.get("followers_count"))
+          }
 
-          // cache it so we don't look it up again
+          if(user.get("followers_count") > 3000) {
+            self.unshiftObject(tweet)
+          }
           this._idCache[id] = tweet.id;
         }
       },
@@ -94,7 +139,9 @@
         }
 
         var self = this;
-        $.getJSON("http://search.twitter.com/search.json?q=" + query + "&callback=?", function(data) {
+        var url = "http://search.twitter.com/search.json?limit=10000&rpp=100&q=" + query + "&callback=?"
+        $.getJSON(url, function(data) {
+          console.log(data.results.length)
           for (var i = data.results.length-1; i >= 0; i--) {
             self.addTweet(Twitter.Tweet.create(data.results[i]));
           }
