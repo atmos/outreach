@@ -10,6 +10,7 @@
   <style type="text/css">
     body {background: #333; font-size: 64px; color: #999; margin: 0; padding: 0}
     ul { margin-top: 5px; padding-left: 0; }
+    img { border: 1px solid #fff; }
     .twitter-posts {padding: 10px; margin-left: 5px; list-style-position: inside; list-style-type:none; border-bottom: 1px solid #000;}
     .twitter-posts a {text-decoration:none; color: #FFF;}
   </style>
@@ -41,7 +42,7 @@
         // Polling
         setInterval(function() {
           Twitter.searchResults.refresh()
-        }, Twitter.config.refresh * 1000)
+        }, Twitter.config.refreshRate * 1000)
 
         Twitter.searchResults.set("query", Twitter.config.account)
         this._super()
@@ -52,7 +53,7 @@
     Twitter.config = {
       account: "@GitHub",
       refreshRate: 60,
-      minFollowers: 5000
+      minFollowers: 500
     }
 
     // Persistence
