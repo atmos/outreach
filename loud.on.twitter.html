@@ -2,38 +2,38 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<meta charset="UTF-8">
-<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-<title>Loud on Twitter : GitHub</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style type="text/css">
-  body {background: #333; font-size: 64px; color: #999; margin: 0; padding: 0}
-  ul { margin-top: 5px; padding-left: 0; }
-  .twitter-posts {padding: 10px; margin-left: 5px; list-style-position: inside; list-style-type:none; border-bottom: 1px solid #000;}
-  .twitter-posts a {text-decoration:none; color: #FFF;}
-</style>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+  <title>Loud on Twitter : GitHub</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style type="text/css">
+    body {background: #333; font-size: 64px; color: #999; margin: 0; padding: 0}
+    ul { margin-top: 5px; padding-left: 0; }
+    .twitter-posts {padding: 10px; margin-left: 5px; list-style-position: inside; list-style-type:none; border-bottom: 1px solid #000;}
+    .twitter-posts a {text-decoration:none; color: #FFF;}
+  </style>
+  <script src="http://code.jquery.com/jquery.js"></script>
+  <script src="js/twitter-text.min.js"></script>
+  <script src="js/ember-0.9.5.min.js"></script>
+  <script src="js/ember/data.js"></script>
+  <script src="js/ember/localStorage.js"></script>
 </head>
 <body>
   <script type="text/x-handlebars">
-    Loud tweets about @GitHub...
+    Loud tweets about {{Twitter.config.account}}...
     <div>
       <ul>
       {{#each Twitter.searchResults}}
         <li class="twitter-posts">
           <img src="{{unbound avatar}}" alt="{{unbound from_user}}" />
-          <a href="{{unbound userLink}}" class="profile">@{{from_user}}({{followers}})</a> <a href="{{unbound tweetLink}}">says...</a>
+          <a href="{{unbound userLink}}" class="profile" target="tab">@{{from_user}}({{followers}})</a> <a href="{{unbound link}}" target="tab">says...</a>
           <div class="tweet">{{{tweetText}}}</div>
         </li>
       {{/each}}
       </ul>
     </div>
   </script>
-  <script src="http://code.jquery.com/jquery.js"></script>
-  <script src="js/twitter-text.min.js"></script>
-  <script src="js/ember-0.9.5.min.js"></script>
-  <script src="js/ember/data.js"></script>
-  <script src="js/ember/localStorage.js"></script>
   <script>
     // Namespace
     Twitter = Em.Application.create({
@@ -41,40 +41,44 @@
         // Polling
         setInterval(function() {
           Twitter.searchResults.refresh()
-        }, 2000)
+        }, Twitter.config.refresh * 1000)
 
-        Twitter.searchResults.set("query", "@github")
-
+        Twitter.searchResults.set("query", Twitter.config.account)
         this._super()
       }
     })
+
+    // Choose the account to follow and the min followers required
+    Twitter.config = {
+      account: "@GitHub",
+      refreshRate: 60,
+      minFollowers: 5000
+    }
+
     // Persistence
     Twitter.store = DS.Store.create({
       adapter:  DS.localStorageAdapter.create({bulkCommit: true}),
       revision: 4
-    });
+    })
 
     Twitter.findUser = function(name) {
       var user  = null
         , users = Twitter.store.findAll(Twitter.User)
 
       users.forEach(function(u) {
-        if(u.get("screen_name") == name) {
+        if(u.get("screen_name") == name)
           user = u
-        }
       })
-      if(user) {
-        return user
-      } else {
+      if(user === null) {
         var url  = "http://api.twitter.com/1/users/lookup.json?callback=?&screen_name="
         $.getJSON(url + name, function(profiles) {
           $.each(profiles, function(count, author) {
             user = Twitter.store.createRecord(Twitter.User, author)
             Twitter.store.commit()
-            return user
           })
         })
       }
+      return user
     }
 
     //// Models
@@ -89,10 +93,10 @@
 
     Twitter.Tweet = Em.Object.extend({
       link: function() {
-        return ("https://twitter.com/" + this.get("from_user"))
-      }.property(),
-      tweetLink: function() {
         return(this.get("userLink") + "/status/" + this.get("id_str"))
+      }.property(),
+      userLink: function() {
+        return this.user().get("link")
       }.property(),
       tweetText: function() {
         return twttr.txt.autoLink(this.get("text"))
@@ -106,7 +110,7 @@
       avatar: function() {
         return this.user().get("profile_image_url")
       }.property()
-    });
+    })
     // Collection
     Twitter.searchResults = Em.ArrayController.create({
       query: null,
@@ -115,39 +119,33 @@
 
       addTweet: function(tweet) {
         var   id = tweet.get("id")
+          , user = null
           , self = this
 
         if (typeof this._idCache[id] === "undefined") {
-          var user = Twitter.findUser(tweet.get("from_user"))
+          user = Twitter.findUser(tweet.get("from_user"))
           if(user) {
             console.log(tweet.get("from_user") + " : " + user.get("followers_count"))
+            if(user.get("followers_count") > Twitter.config.minFollowers) {
+              self.unshiftObject(tweet)
+            }
+            this._idCache[id] = tweet.id
           }
-
-          if(user.get("followers_count") > 3000) {
-            self.unshiftObject(tweet)
-          }
-          this._idCache[id] = tweet.id;
         }
       },
 
       refresh: function() {
-        var query = this.get("query");
+        var query = this.get("query")
+          , self = this
+          , url = "http://search.twitter.com/search.json?limit=10000&rpp=100&q=" + query + "&callback=?"
 
-        if (Em.empty(query)) {
-          this.set("content", []);
-          return;
-        }
-
-        var self = this;
-        var url = "http://search.twitter.com/search.json?limit=10000&rpp=100&q=" + query + "&callback=?"
         $.getJSON(url, function(data) {
-          console.log(data.results.length)
           for (var i = data.results.length-1; i >= 0; i--) {
-            self.addTweet(Twitter.Tweet.create(data.results[i]));
+            self.addTweet(Twitter.Tweet.create(data.results[i]))
           }
-        });
+        })
       }.observes("query")
-    });
+    })
   </script>
 </body>
 </html>
