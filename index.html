@@ -30,7 +30,7 @@
           <a href="{{unbound userLink}}" class="profile" target="tab">
             <img src="{{unbound avatar}}" alt="{{unbound from_user}}" />
           </a>
-          <a href="{{unbound link}}" target="tab">@{{from_user}}({{followers}})</a>  said 
+          <a href="{{unbound link}}" target="tab">@{{from_user}}({{followers}})</a>  said
           <span class="tweet" data-created-at="{{unbound createdAtEpoch}}">{{timeAgoInWords}} ago.</span>
           <div class="tweet">{{{tweetText}}}</div>
         </li>
@@ -39,188 +39,201 @@
     </div>
   </script>
   <script>
-// Namespace
-Twitter = Em.Application.create({
-  ready: function() {
-    // Polling
-    setInterval(function() {
-      Twitter.searchResults.refresh()
-    }, Twitter.get("refreshRate"))
+  // Namespace
+  Twitter = Em.Application.create({
+    ready: function() {
+      // Polling
+      setInterval(function() {
+        $.getJSON("http://api.twitter.com/1/account/rate_limit_status.json?callback=?", function(data) {
+          if(data['remaining_hits'] > 0) {
+            Twitter.searchResults.refresh()
+          } else {
+          var now       = new Date().getTime()
+            , minutes   = null
+            , waitUntil = new Date(data['reset_time']).getTime()
 
-    console.log("Searching for " + this.get("account"))
-    Twitter.searchResults.set("query", this.get("account"))
-    this._super()
-  },
-  params: function() {
-    var qs = window.location.search.replace('?', '')
-      , pairs = qs.split('&')
-      , nvpair = {}
+            minutes = (waitUntil - now) / 60000
 
-    $.each(pairs, function(i, v){
-      var pair = v.split('=');
-      nvpair[pair[0]] = pair[1];
-    });
-    return nvpair;
-  }.property(),
-  account: function() {
-    return(this.get("params")['q'] || '@GitHub')
-  }.property(),
-  refreshRate: function() {
-    var rate = this.get("params")['r'] || 60
-    if(rate < 30) { rate = 30 }
-    return(rate * 1000);
-  }.property(),
-  minFollowers: function() {
-    var rate = this.get("params")['c'] || 500
-    if(rate < 10) { rate = 10 }
-    return(rate);
-  }.property(),
-  timeAgoInWords: function(timestamp) {
-    var now = (new Date).getTime()
-      , result = null
+            console.log("Rate limited for " + minutes + " more minutes.")
+          }
+        })
+      }, Twitter.get("refreshRate"))
 
-    if(timestamp.match(/\d+/)) {
-      var dt = Math.round(parseInt((now / 1000) - timestamp)/60)
-      if(dt == 0) { result = "less than a minute" }
-      else if(dt == 1) { result = "1 minute" }
-      else if(dt >= 2 && dt <= 45) { result = dt + ' minutes' }
-      else if(dt >= 46 && dt <= 90) { result = 'about 1 hour' }
-      else if(dt >= 90 && dt <= 1440) { result = 'about ' + Math.round(parseFloat(dt)/60.0) + ' hours' }
-      else if(dt >= 1440 && dt <= 2880) { result = '1 day' }
-      else { result = Math.round(parseInt(dt)/1440) + ' days' }
-    }
-    return(result)
-  },
-  refreshTimestamps: function() {
-    $('span.tweet').toArray().forEach(function(el) {
-      var result = Twitter.timeAgoInWords($(el).attr('data-created-at'))
-        , content = $(el).html().replace(/.*? ago/, 'about ' + result + ' ago')
+      console.log("Searching for " + this.get("account"))
+      Twitter.searchResults.set("query", this.get("account"))
+      this._super()
+    },
+    params: function() {
+      var qs = window.location.search.replace('?', '')
+        , pairs = qs.split('&')
+        , nvpair = {}
 
-      $(el).html(content);
-    })
-  }
-})
+      $.each(pairs, function(i, v){
+        var pair = v.split('=');
+        nvpair[pair[0]] = pair[1];
+      });
+      return nvpair;
+    }.property(),
+    account: function() {
+      return(this.get("params")['q'] || '@GitHub')
+    }.property(),
+    refreshRate: function() {
+      var rate = this.get("params")['r'] || 60
+      if(rate < 30) { rate = 30 }
+      return(rate * 1000);
+    }.property(),
+    minFollowers: function() {
+      var rate = this.get("params")['c'] || 500
+      if(rate < 10) { rate = 10 }
+      return(rate);
+    }.property(),
+    timeAgoInWords: function(timestamp) {
+      var now = (new Date).getTime()
+        , result = null
 
-// Persistence
-Twitter.store = DS.Store.create({
-  adapter:  DS.localStorageAdapter.create({bulkCommit: true}),
-  revision: 4
-})
-
-Twitter.findUser = function(name) {
-  var user  = null
-    , users = Twitter.store.findAll(Twitter.User)
-
-  users.forEach(function(u) {
-    if(u.get("screen_name") == name)
-      user = u
-  })
-  if(user === null) {
-    var url  = "http://api.twitter.com/1/users/lookup.json?callback=?&screen_name="
-    $.getJSON(url + name, function(profiles) {
-      $.each(profiles, function(count, author) {
-        user = Twitter.store.createRecord(Twitter.User, author)
-        Twitter.store.commit()
-      })
-    }).error(function() { 
-      console.log("Unable to lookup " + name)
-    })
-  }
-  return user
-}
-Twitter.userCount = function() {
-  var count = Twitter.store.findAll(Twitter.User).toArray().length
-  return(count > 100 ? count : 100)
-}
-
-//// Models
-Twitter.User = DS.Model.extend({
-  name:            DS.attr('string'),
-  followers_count: DS.attr('integer'),
-
-  link: function() {
-    return ("https://twitter.com/" + this.get("screen_name"))
-  }.property(),
-})
-
-Twitter.Tweet = Em.Object.extend({
-  link: function() {
-    return(this.get("userLink") + "/status/" + this.get("id_str"))
-  }.property(),
-  userLink: function() {
-    return this.user().get("link")
-  }.property(),
-  tweetText: function() {
-    return twttr.txt.autoLink(this.get("text"))
-  }.property(),
-  user: function() {
-    return Twitter.findUser(this.get("from_user"))
-  },
-  followers: function() {
-    return this.user().get("followers_count")
-  }.property(),
-  avatar: function() {
-    return this.user().get("profile_image_url")
-  }.property(),
-  createdAtEpoch: function() {
-    return(new Date(this.get("created_at")).getTime() / 1000)
-  }.property(),
-  timeAgoInWords: function() {
-    return(Twitter.timeAgoInWords(this.get("createdAtEpoch").toString()))
-  }.property()
-})
-// Collection
-Twitter.searchResults = Em.ArrayController.create({
-  query: null,
-  content: [],
-  _idCache: {},
-
-  addTweet: function(tweet) {
-    var   id = tweet.get("id")
-      , user = null
-      , self = this
-
-    if (typeof this._idCache[id] === "undefined") {
-      user = Twitter.findUser(tweet.get("from_user"))
-      if(user) {
-        console.log(tweet.get("from_user") + " : " + user.get("followers_count"))
-        if(user.get("followers_count") > Twitter.get("minFollowers")) {
-
-          self.unshiftObject(tweet)
-        }
-        this._idCache[id] = tweet.id
+      if(timestamp.match(/\d+/)) {
+        var dt = Math.round(parseInt((now / 1000) - timestamp)/60)
+        if(dt == 0) { result = "less than a minute" }
+        else if(dt == 1) { result = "1 minute" }
+        else if(dt >= 2 && dt <= 45) { result = dt + ' minutes' }
+        else if(dt >= 46 && dt <= 90) { result = 'about 1 hour' }
+        else if(dt >= 90 && dt <= 1440) { result = 'about ' + Math.round(parseFloat(dt)/60.0) + ' hours' }
+        else if(dt >= 1440 && dt <= 2880) { result = '1 day' }
+        else { result = Math.round(parseInt(dt)/1440) + ' days' }
       }
-    }
-  },
+      return(result)
+    },
+    refreshTimestamps: function() {
+      $('span.tweet').toArray().forEach(function(el) {
+        var result = Twitter.timeAgoInWords($(el).attr('data-created-at'))
+          , content = $(el).html().replace(/.*? ago/, 'about ' + result + ' ago')
 
-  sort: function() {
-    var sortedContent = this.get("content").sort(function(a,b){
-      return a.get("createdAtEpoch") < b.get("createdAtEpoch")
-    })
-    this.set("content", [])
-    this.set("content", sortedContent)
-  },
-
-  refresh: function() {
-    var query = this.get("query")
-      , self  = this
-      , results = [ ]
-      , pages = Math.floor(Twitter.userCount() / 100) + 1
-
-    if(pages > 15) { pages = 15; }
-
-    page = 5
-    for(i = pages; i > 0; i--) {
-      var url = "http://search.twitter.com/search.json?limit=10000&rpp=100&q=" + query + "&callback=?&page=" + i
-      $.getJSON(url, function(data) {
-        for (var i = data.results.length - 1; i >= 0; i--) {
-          self.addTweet(Twitter.Tweet.create(data.results[i]))
-        }
+        $(el).html(content);
       })
     }
-    Twitter.refreshTimestamps()
-  }.observes("query")
-})
+  })
+
+  // Persistence
+  Twitter.store = DS.Store.create({
+    adapter:  DS.localStorageAdapter.create({bulkCommit: true}),
+    revision: 4
+  })
+
+  Twitter.findUser = function(name) {
+    var user  = null
+      , users = Twitter.store.findAll(Twitter.User)
+
+    users.forEach(function(u) {
+      if(u.get("screen_name") == name)
+        user = u
+    })
+    if(user === null) {
+      var url  = "http://api.twitter.com/1/users/lookup.json?callback=?&screen_name="
+      $.getJSON(url + name, function(profiles) {
+        $.each(profiles, function(count, author) {
+          user = Twitter.store.createRecord(Twitter.User, author)
+          Twitter.store.commit()
+        })
+      })
+    }
+    return user
+  }
+  Twitter.userCount = function() {
+    var count = Twitter.store.findAll(Twitter.User).toArray().length
+    return(count > 100 ? count : 100)
+  }
+
+  //// Models
+  Twitter.User = DS.Model.extend({
+    name:            DS.attr('string'),
+    followers_count: DS.attr('integer'),
+
+    link: function() {
+      return ("https://twitter.com/" + this.get("screen_name"))
+    }.property(),
+  })
+
+  Twitter.Tweet = Em.Object.extend({
+    link: function() {
+      return(this.get("userLink") + "/status/" + this.get("id_str"))
+    }.property(),
+    userLink: function() {
+      return this.user().get("link")
+    }.property(),
+    tweetText: function() {
+      return twttr.txt.autoLink(this.get("text"))
+    }.property(),
+    user: function() {
+      return Twitter.findUser(this.get("from_user"))
+    },
+    followers: function() {
+      return this.user().get("followers_count")
+    }.property(),
+    avatar: function() {
+      return this.user().get("profile_image_url")
+    }.property(),
+    createdAtEpoch: function() {
+      return(new Date(this.get("created_at")).getTime() / 1000)
+    }.property(),
+    timeAgoInWords: function() {
+      return(Twitter.timeAgoInWords(this.get("createdAtEpoch").toString()))
+    }.property()
+  })
+  // Collection
+  Twitter.searchResults = Em.ArrayController.create({
+    query: null,
+    content: [],
+    _idCache: {},
+
+    addTweet: function(tweet) {
+      var   id = tweet.get("id")
+        , user = null
+        , self = this
+
+      if (typeof this._idCache[id] === "undefined") {
+        user = Twitter.findUser(tweet.get("from_user"))
+        if(user) {
+          console.log(tweet.get("from_user") + " : " + user.get("followers_count"))
+          if(user.get("followers_count") > Twitter.get("minFollowers")) {
+            self.insertSorted(tweet)
+          }
+          this._idCache[id] = tweet.id
+        }
+      }
+    },
+
+    insertSorted: function(newTweet) {
+      var idx  = 0
+        , self = this
+
+      $.each(this.get("content"), function(arrayIndex, tweet) {
+        if(newTweet.get("createdAtEpoch") < tweet.get("createdAtEpoch")) {
+          idx = arrayIndex
+          return false
+        }
+      })
+      self.insertAt(idx, newTweet)
+    },
+
+    refresh: function() {
+      var query = this.get("query")
+        , self  = this
+
+      for(i = 1; i < 16; i++) {
+        $.getJSON("http://api.twitter.com/1/account/rate_limit_status.json?callback=?", function(data) {
+          if(data['remaining_hits'] > 0) {
+            var url = "http://search.twitter.com/search.json?limit=10000&rpp=100&q=" + query + "&callback=?&page=" + i
+            $.getJSON(url, function(searches) {
+              for (j = 0; j < searches.results.length; j++) {
+                self.addTweet(Twitter.Tweet.create(searches.results[j]))
+              }
+            })
+          }
+        })
+      }
+      Twitter.refreshTimestamps()
+    }.observes("query")
+  })
   </script>
 </body>
 </html>
