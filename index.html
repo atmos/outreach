@@ -224,8 +224,12 @@
           if(data['remaining_hits'] > 0) {
             var url = "http://search.twitter.com/search.json?limit=10000&rpp=100&q=" + query + "&callback=?&page=" + i
             $.getJSON(url, function(searches) {
-              for (j = 0; j < searches.results.length; j++) {
-                self.addTweet(Twitter.Tweet.create(searches.results[j]))
+              if(searches !== undefined) {
+                for (j = 0; j < searches.results.length; j++) {
+                  self.addTweet(Twitter.Tweet.create(searches.results[j]))
+                }
+              } else {
+                console.log("No results for \"" + query + "\" on page " + i)
               }
             })
           }
