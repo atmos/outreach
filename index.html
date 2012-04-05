@@ -219,7 +219,7 @@
       var query = this.get("query")
         , self  = this
 
-      for(i = 1; i < 16; i++) {
+      for(i = 1; i < 15; i++) {
         $.getJSON("http://api.twitter.com/1/account/rate_limit_status.json?callback=?", function(data) {
           if(data['remaining_hits'] > 0) {
             var url = "http://search.twitter.com/search.json?limit=10000&rpp=100&q=" + query + "&callback=?&page=" + i
