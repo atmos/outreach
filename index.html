@@ -5,12 +5,15 @@
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-  <title>Tweets that Reach</title>
+  <title>Twitter Outreach : by @atmos</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style type="text/css">
     body {background: #333; font-size: 64px; color: #999; margin: 0; padding: 0}
+    h1 { margin: 0; border: 1px solid #000; padding-left: 15px; font-size: 64px; }
     ul { margin-top: 5px; padding-left: 0; }
     img { border: 1px solid #fff; }
+    .tweet {font-size: 38px; }
+    .time-ago {padding: 0px; line-height: 64px; font-size: 48px;}
     .twitter-posts {padding: 10px; margin-left: 5px; list-style-position: inside; list-style-type:none; border-bottom: 1px solid #000;}
     .twitter-posts a {text-decoration:none; color: #FFF;}
   </style>
@@ -22,7 +25,7 @@
 </head>
 <body>
   <script type="text/x-handlebars">
-    Tweets with reach: {{Twitter.account}}...
+    <h1>Outreach on {{Twitter.account}}...</h1>
     <div>
       <ul>
       {{#each Twitter.searchResults}}
@@ -30,8 +33,8 @@
           <a href="{{unbound userLink}}" class="profile" target="tab">
             <img src="{{unbound avatar}}" alt="{{unbound from_user}}" />
           </a>
-          <a href="{{unbound link}}" target="tab">@{{from_user}}({{followers}})</a>  said
-          <span class="tweet" data-created-at="{{unbound createdAtEpoch}}">{{timeAgoInWords}} ago.</span>
+          <a href="{{unbound link}}" target="tab">@{{from_user}}({{followers}})</a>
+          <span class="time-ago" data-created-at="{{unbound createdAtEpoch}}">said about {{timeAgoInWords}} ago.</span>
           <div class="tweet">{{{tweetText}}}</div>
         </li>
       {{/each}}
@@ -39,28 +42,21 @@
     </div>
   </script>
   <script>
-  // Namespace
+
+  // Nest all sorts of crazy shit off of this
   Twitter = Em.Application.create({
     ready: function() {
-      // Polling
+      var self = this
+
       setInterval(function() {
-        $.getJSON("http://api.twitter.com/1/account/rate_limit_status.json?callback=?", function(data) {
-          if(data['remaining_hits'] > 0) {
-            Twitter.searchResults.refresh()
-          } else {
-          var now       = new Date().getTime()
-            , minutes   = null
-            , waitUntil = new Date(data['reset_time']).getTime()
-
-            minutes = (waitUntil - now) / 60000
-
-            console.log("Rate limited for " + minutes + " more minutes.")
-          }
-        })
+        Twitter.searchResults.refresh()
+        Twitter.refreshTimestamps()
+        Twitter.rateLimits.refresh()
       }, Twitter.get("refreshRate"))
 
-      console.log("Searching for " + this.get("account"))
-      Twitter.searchResults.set("query", this.get("account"))
+      Twitter.rateLimits.refresh(function() {
+        Twitter.searchResults.set("query", self.get("account"))
+      })
       this._super()
     },
     params: function() {
@@ -69,10 +65,10 @@
         , nvpair = {}
 
       $.each(pairs, function(i, v){
-        var pair = v.split('=');
-        nvpair[pair[0]] = pair[1];
-      });
-      return nvpair;
+        var pair = v.split('=')
+        nvpair[pair[0]] = pair[1]
+      })
+      return nvpair
     }.property(),
     account: function() {
       return(this.get("params")['q'] || '@GitHub')
@@ -80,12 +76,12 @@
     refreshRate: function() {
       var rate = this.get("params")['r'] || 60
       if(rate < 30) { rate = 30 }
-      return(rate * 1000);
+      return(rate * 1000)
     }.property(),
     minFollowers: function() {
       var rate = this.get("params")['c'] || 500
       if(rate < 10) { rate = 10 }
-      return(rate);
+      return(rate)
     }.property(),
     timeAgoInWords: function(timestamp) {
       var now = (new Date).getTime()
@@ -96,30 +92,38 @@
         if(dt == 0) { result = "less than a minute" }
         else if(dt == 1) { result = "1 minute" }
         else if(dt >= 2 && dt <= 45) { result = dt + ' minutes' }
-        else if(dt >= 46 && dt <= 90) { result = 'about 1 hour' }
-        else if(dt >= 90 && dt <= 1440) { result = 'about ' + Math.round(parseFloat(dt)/60.0) + ' hours' }
+        else if(dt >= 46 && dt <= 90) { result = '1 hour' }
+        else if(dt >= 90 && dt <= 1440) { result = Math.round(parseFloat(dt)/60.0) + ' hours' }
         else if(dt >= 1440 && dt <= 2880) { result = '1 day' }
         else { result = Math.round(parseInt(dt)/1440) + ' days' }
       }
       return(result)
     },
     refreshTimestamps: function() {
-      $('span.tweet').toArray().forEach(function(el) {
+      $('span.time-ago').toArray().forEach(function(el) {
         var result = Twitter.timeAgoInWords($(el).attr('data-created-at'))
-          , content = $(el).html().replace(/.*? ago/, 'about ' + result + ' ago')
+          , content = $(el).html().replace(/.*? ago/, 'said about ' + result + ' ago')
 
-        $(el).html(content);
+        $(el).html(content)
       })
     }
   })
 
-  // Persistence
+  // Ghetto Local Storage
   Twitter.store = DS.Store.create({
     adapter:  DS.localStorageAdapter.create({bulkCommit: true}),
     revision: 4
   })
 
-  Twitter.findUser = function(name) {
+  // Find a user or look up their follower count from the API
+
+  // Models
+  //// I don't think the attributes even do anything
+  Twitter.User = DS.Model.extend({
+    name:            DS.attr('string'),
+    followers_count: DS.attr('integer'),
+  })
+  Twitter.User.findByName = function(name) {
     var user  = null
       , users = Twitter.store.findAll(Twitter.User)
 
@@ -138,33 +142,23 @@
     }
     return user
   }
-  Twitter.userCount = function() {
-    var count = Twitter.store.findAll(Twitter.User).toArray().length
-    return(count > 100 ? count : 100)
+  Twitter.User.count = function() {
+    return Twitter.store.findAll(Twitter.User).toArray().length
   }
 
-  //// Models
-  Twitter.User = DS.Model.extend({
-    name:            DS.attr('string'),
-    followers_count: DS.attr('integer'),
-
-    link: function() {
-      return ("https://twitter.com/" + this.get("screen_name"))
-    }.property(),
-  })
-
+  // Seems verbose
   Twitter.Tweet = Em.Object.extend({
     link: function() {
       return(this.get("userLink") + "/status/" + this.get("id_str"))
     }.property(),
     userLink: function() {
-      return this.user().get("link")
+      return "https://twitter.com/" + this.get("from_user")
     }.property(),
     tweetText: function() {
       return twttr.txt.autoLink(this.get("text"))
     }.property(),
     user: function() {
-      return Twitter.findUser(this.get("from_user"))
+      return Twitter.User.findByName(this.get("from_user"))
     },
     followers: function() {
       return this.user().get("followers_count")
@@ -179,63 +173,73 @@
       return(Twitter.timeAgoInWords(this.get("createdAtEpoch").toString()))
     }.property()
   })
-  // Collection
+
+  // How often you can really hit the API
+  Twitter.rateLimits = Em.Object.create({
+    data: {},
+    available: 0,
+
+    refresh: function(cb) {
+      var self = this
+      $.getJSON("http://api.twitter.com/1/account/rate_limit_status.json?callback=?", function(data) {
+        if(data['remaining_hits'] < 1) {
+          var now       = new Date().getTime()
+            , minutes   = null
+            , waitUntil = new Date(data['reset_time']).getTime()
+
+          minutes = (waitUntil - now) / 60000
+          // This should be a thing
+          console.log("Rate limited for " + parseInt(minutes) + " more minutes.")
+        }
+        self.data = data
+        if(cb !== undefined) {
+          cb()
+        }
+      })
+    },
+    remaining: function() {
+      return this.data['remaining_hits']
+    }.property()
+  })
+
+  // Results from twitter
   Twitter.searchResults = Em.ArrayController.create({
-    query: null,
-    content: [],
-    _idCache: {},
+    query: null,  // What gets searched for on each refresh
+    content: [],  // An unpredicitably ordered array
+    _idCache: {}, // id based mapping to avoid dupes
 
     addTweet: function(tweet) {
       var   id = tweet.get("id")
-        , user = null
-        , self = this
 
       if (typeof this._idCache[id] === "undefined") {
-        user = Twitter.findUser(tweet.get("from_user"))
+        var user = Twitter.User.findByName(tweet.get("from_user"))
         if(user) {
           console.log(tweet.get("from_user") + " : " + user.get("followers_count"))
           if(user.get("followers_count") > Twitter.get("minFollowers")) {
-            self.insertSorted(tweet)
+            this.pushObject(tweet)
           }
           this._idCache[id] = tweet.id
         }
       }
     },
 
-    insertSorted: function(newTweet) {
-      var idx  = 0
-        , self = this
-
-      $.each(this.get("content"), function(arrayIndex, tweet) {
-        if(newTweet.get("createdAtEpoch") < tweet.get("createdAtEpoch")) {
-          idx = arrayIndex
-          return false
-        }
-      })
-      self.insertAt(idx, newTweet)
-    },
-
     refresh: function() {
       var query = this.get("query")
         , self  = this
 
-      for(i = 1; i < 15; i++) {
-        $.getJSON("http://api.twitter.com/1/account/rate_limit_status.json?callback=?", function(data) {
-          if(data['remaining_hits'] > 0) {
-            var url = "http://search.twitter.com/search.json?limit=10000&rpp=100&q=" + query + "&callback=?&page=" + i
-            $.getJSON(url, function(searches) {
-              if(searches.results !== undefined) {
-                for (j = 0; j < searches.results.length; j++) {
-                  self.addTweet(Twitter.Tweet.create(searches.results[j]))
-                }
-              } else {
-                console.log("No results for \"" + query + "\" on page " + i)
-              }
-            })
+      console.log("Searching for " + query)
+      if(Twitter.rateLimits.get("remaining") > 0) {
+        var url = "http://search.twitter.com/search.json?limit=10000&rpp=100&q=" + query + "&callback=?"
+        $.getJSON(url, function(searches) {
+          if(searches.results !== undefined) {
+            for (i = 0; i < searches.results.length; i++) {
+              self.addTweet(Twitter.Tweet.create(searches.results[i]))
+            }
+          } else {
+            console.log("No results for \"" + query + "\" on page 1")
           }
         })
       }
-      Twitter.refreshTimestamps()
     }.observes("query")
   })
   </script>
