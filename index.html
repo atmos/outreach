@@ -132,13 +132,15 @@
         user = u
     })
     if(user === null) {
-      var url  = "http://api.twitter.com/1/users/lookup.json?callback=?&screen_name="
-      $.getJSON(url + name, function(profiles) {
-        $.each(profiles, function(count, author) {
-          user = Twitter.store.createRecord(Twitter.User, author)
-          Twitter.store.commit()
+      if(Twitter.rateLimits.get("remaining") > 0) {
+        var url  = "http://api.twitter.com/1/users/lookup.json?callback=?&screen_name="
+        $.getJSON(url + name, function(profiles) {
+          $.each(profiles, function(count, author) {
+            user = Twitter.store.createRecord(Twitter.User, author)
+            Twitter.store.commit()
+          })
         })
-      })
+      }
     }
     return user
   }
@@ -228,18 +230,16 @@
         , self  = this
 
       console.log("Searching for " + query)
-      if(Twitter.rateLimits.get("remaining") > 0) {
-        var url = "http://search.twitter.com/search.json?limit=10000&rpp=100&q=" + query + "&callback=?"
-        $.getJSON(url, function(searches) {
-          if(searches.results !== undefined) {
-            for (i = 0; i < searches.results.length; i++) {
-              self.addTweet(Twitter.Tweet.create(searches.results[i]))
-            }
-          } else {
-            console.log("No results for \"" + query + "\" on page 1")
+      var url = "http://search.twitter.com/search.json?limit=10000&rpp=100&q=" + query + "&callback=?"
+      $.getJSON(url, function(searches) {
+        if(searches.results !== undefined) {
+          for (i = 0; i < searches.results.length; i++) {
+            self.addTweet(Twitter.Tweet.create(searches.results[i]))
           }
-        })
-      }
+        } else {
+          console.log("No results for \"" + query + "\" on page 1")
+        }
+      })
     }.observes("query")
   })
   </script>
