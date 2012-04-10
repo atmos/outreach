@@ -3,8 +3,8 @@ var url     = require("url")
   , redis   = require("redis")
 
 
-info   = url.parse(process.env.REDISTOGO_URL || 'redis://localhost:6379')
-client = redis.createClient(info.port, info.hostname)
+var info   = url.parse(process.env.REDISTOGO_URL || 'redis://localhost:6379')
+  , client = redis.createClient(info.port, info.hostname)
 
 if(info.auth)
   client.auth(info.auth.split(":")[1])
@@ -14,17 +14,18 @@ client.on("error", function (err) {
 })
 
 userFromAPI = function(name, cb) {
-  var options = { host: 'api.twitter.com', path: "/1/users/lookup.json" }
+  var data = ""
+    , user = null
+    , options = { host: 'api.twitter.com', path: "/1/users/lookup.json" }
    
   options.path += "?screen_name=" + name
       
   http.get(options, function(httpRes) {
-    var data = ""
     httpRes.on('data', function (chunk) {
       data += chunk
     })
     httpRes.on('end', function () {
-      var user = JSON.parse(data)
+      user = JSON.parse(data)
 
       if(user.length > 0) {
         cb(null, JSON.stringify(user[0]))
@@ -54,5 +55,6 @@ userFromCache = function(name, cb) {
 }
 
 exports.get = function(name, cb) {
-  userFromCache(name, cb);
+  userFromCache(name, cb)
 }
+exports.redis = client

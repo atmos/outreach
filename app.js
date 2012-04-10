@@ -12,7 +12,14 @@ app.configure(function(){
   app.use(express.errorHandler({dumpExceptions: true, showStack: true}))
 })
 
-app.get('/user/:name', function(req,res) {
+app.get('/users', function(req,res) {
+  var stats = {length:0}
+  user.redis.keys("outreach:user:*", function(err, replies) {
+    stats.length = replies.length
+    res.send(JSON.stringify(stats), 200)
+  })
+})
+app.get('/users/:name', function(req,res) {
   var name = req.params.name
 
   res.header("Content-Type", "application/json")
