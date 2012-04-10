@@ -21,7 +21,6 @@ userFromAPI = function(name, cb) {
   http.get(options, function(httpRes) {
     var data = ""
     httpRes.on('data', function (chunk) {
-      console.log('BODY: ' + chunk);
       data += chunk
     })
     httpRes.on('end', function () {
