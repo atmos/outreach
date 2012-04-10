@@ -113,7 +113,6 @@
   })
 
   // Find a user or look up their follower count from the API
-  // Models
   Twitter.User = Em.Object.extend({ })
   Twitter.User.findByName = function(name, cb) {
     var url  = "http://outreach.herokuapp.com/users/" + name
@@ -168,7 +167,7 @@
     _idCache: {}, // id based mapping to avoid dupes
 
     addTweet: function(tweet) {
-      var   id = tweet.get("id")
+      var id = tweet.get("id")
 
       if (typeof this._idCache[id] === "undefined") {
         if(tweet.get("followers") > Twitter.get("minFollowers")) {
@@ -179,8 +178,8 @@
     },
 
     refresh: function() {
-      var query = this.get("query")
-        , self  = this
+      var self  = this
+        , query = this.get("query")
 
       console.log("Searching for " + query)
       var url = "http://search.twitter.com/search.json?limit=10000&rpp=100&q=" + query + "&callback=?"
