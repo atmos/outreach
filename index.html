@@ -9,14 +9,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style type="text/css">
     body {background: #333; font-size: 64px; color: #999; margin: 0; padding: 0}
-    h1 { margin: 0; border: 1px solid #000; padding-left: 15px; font-size: 64px; }
+    h1 { margin: 0; border-bottom: 1px solid #000; padding-left: 15px; font-size: 64px; }
     ul { margin-top: 5px; padding-left: 0; }
     img { border: 1px solid #fff; }
     .tweet {font-size: 38px; }
     .time-ago {padding: 0px; line-height: 64px; font-size: 48px;}
     .twitter-posts {padding: 10px; margin-left: 5px; list-style-position: inside; list-style-type:none; border-bottom: 1px solid #000;}
     .twitter-posts a {text-decoration:none; color: #FFF;}
+    li.twitter-posts  {margin-left: 0; }
   </style>
+  <script src="https://github.com/themes/minimal/javascripts/scale.fix.js"></script>
   <script src="http://code.jquery.com/jquery.js"></script>
   <script src="js/twitter-text.min.js"></script>
   <script src="js/ember-0.9.5.min.js"></script>
@@ -25,7 +27,7 @@
 </head>
 <body>
   <script type="text/x-handlebars">
-    <h1>Outreach on {{Twitter.account}}...</h1>
+    <h1>On {{Twitter.account}}...</h1>
     <div>
       <ul>
       {{#each Twitter.searchResults}}
