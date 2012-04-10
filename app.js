@@ -23,7 +23,7 @@ app.get('/users/:name', function(req,res) {
   var name = req.params.name
 
   res.header("Content-Type", "application/json")
-  res.header("Origin", "*")
+  res.header("Access-Control-Allow-Origin", "*")
 
   user.get(name, function(err, data) {
     if(err) {
