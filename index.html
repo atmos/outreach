@@ -51,12 +51,9 @@
       setInterval(function() {
         Twitter.searchResults.refresh()
         Twitter.refreshTimestamps()
-        Twitter.rateLimits.refresh()
       }, Twitter.get("refreshRate"))
 
-      Twitter.rateLimits.refresh(function() {
-        Twitter.searchResults.set("query", self.get("account"))
-      })
+      Twitter.searchResults.set("query", self.get("account"))
       this._super()
     },
     params: function() {
@@ -116,36 +113,16 @@
   })
 
   // Find a user or look up their follower count from the API
-
   // Models
-  //// I don't think the attributes even do anything
-  Twitter.User = DS.Model.extend({
-    name:            DS.attr('string'),
-    followers_count: DS.attr('integer'),
-  })
-  Twitter.User.findByName = function(name) {
-    var user  = null
-      , users = Twitter.store.findAll(Twitter.User)
+  Twitter.User = Em.Object.extend({ })
+  Twitter.User.findByName = function(name, cb) {
+    var url  = "http://outreach.herokuapp.com/users/" + name
+      , user = null
 
-    users.forEach(function(u) {
-      if(u.get("screen_name") == name)
-        user = u
+    $.getJSON(url, function(profile) {
+      user = Twitter.User.create(profile)
+      cb(null, user)
     })
-    if(user === null) {
-      if(Twitter.rateLimits.get("remaining") > 0) {
-        var url  = "http://api.twitter.com/1/users/lookup.json?callback=?&screen_name="
-        $.getJSON(url + name, function(profiles) {
-          $.each(profiles, function(count, author) {
-            user = Twitter.store.createRecord(Twitter.User, author)
-            Twitter.store.commit()
-          })
-        })
-      }
-    }
-    return user
-  }
-  Twitter.User.count = function() {
-    return Twitter.store.findAll(Twitter.User).toArray().length
   }
 
   // Seems verbose
@@ -159,14 +136,14 @@
     tweetText: function() {
       return twttr.txt.autoLink(this.get("text"))
     }.property(),
-    user: function() {
-      return Twitter.User.findByName(this.get("from_user"))
-    },
+    user: function(cb) {
+      return this.get("user")
+    }.property(),
     followers: function() {
-      return this.user().get("followers_count")
+      return this.get("user").get("followers_count")
     }.property(),
     avatar: function() {
-      return this.user().get("profile_image_url")
+      return this.get("user").get("profile_image_url")
     }.property(),
     createdAtEpoch: function() {
       return(new Date(this.get("created_at")).getTime() / 1000)
@@ -175,33 +152,13 @@
       return(Twitter.timeAgoInWords(this.get("createdAtEpoch").toString()))
     }.property()
   })
-
-  // How often you can really hit the API
-  Twitter.rateLimits = Em.Object.create({
-    data: {},
-    available: 0,
-
-    refresh: function(cb) {
-      var self = this
-      $.getJSON("http://api.twitter.com/1/account/rate_limit_status.json?callback=?", function(data) {
-        if(data['remaining_hits'] < 1) {
-          var now       = new Date().getTime()
-            , minutes   = null
-            , waitUntil = new Date(data['reset_time']).getTime()
-
-          minutes = (waitUntil - now) / 60000
-          // This should be a thing
-          console.log("Rate limited for " + parseInt(minutes) + " more minutes.")
-        }
-        self.data = data
-        if(cb !== undefined) {
-          cb()
-        }
+  Twitter.Tweet.reopenClass({
+    createTweet: function(tweetData, cb) {
+      Twitter.User.findByName(tweetData.from_user, function(err, userData) {
+        tweetData.user = userData
+        cb(err, Twitter.Tweet.create(tweetData))
       })
-    },
-    remaining: function() {
-      return this.data['remaining_hits']
-    }.property()
+    }
   })
 
   // Results from twitter
@@ -214,14 +171,10 @@
       var   id = tweet.get("id")
 
       if (typeof this._idCache[id] === "undefined") {
-        var user = Twitter.User.findByName(tweet.get("from_user"))
-        if(user) {
-          console.log(tweet.get("from_user") + " : " + user.get("followers_count"))
-          if(user.get("followers_count") > Twitter.get("minFollowers")) {
-            this.pushObject(tweet)
-          }
-          this._idCache[id] = tweet.id
+        if(tweet.get("followers") > Twitter.get("minFollowers")) {
+          this.pushObject(tweet)
         }
+        this._idCache[id] = tweet.id
       }
     },
 
@@ -234,7 +187,9 @@
       $.getJSON(url, function(searches) {
         if(searches.results !== undefined) {
           for (i = 0; i < searches.results.length; i++) {
-            self.addTweet(Twitter.Tweet.create(searches.results[i]))
+            Twitter.Tweet.createTweet(searches.results[i], function(err, tweet) {
+              self.addTweet(tweet)
+            })
           }
         } else {
           console.log("No results for \"" + query + "\" on page 1")
