@@ -108,12 +108,6 @@
     }
   })
 
-  // Ghetto Local Storage
-  Twitter.store = DS.Store.create({
-    adapter:  DS.localStorageAdapter.create({bulkCommit: true}),
-    revision: 4
-  })
-
   // Find a user or look up their follower count from the API
   Twitter.User = Em.Object.extend({ })
   Twitter.User.findByName = function(name, cb) {
