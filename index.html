@@ -167,7 +167,7 @@
 
       if (typeof this._idCache[id] === "undefined") {
         if(tweet.get("followers") > Twitter.get("minFollowers")) {
-          this.pushObject(tweet)
+          this.unshiftObject(tweet)
         }
         this._idCache[id] = tweet.id
       }
@@ -181,7 +181,7 @@
       var url = "http://search.twitter.com/search.json?limit=10000&rpp=100&q=" + query + "&callback=?"
       $.getJSON(url, function(searches) {
         if(searches.results !== undefined) {
-          for (i = 0; i < searches.results.length; i++) {
+          for (i = searches.results.length - 1; i > 0; i--) {
             Twitter.Tweet.createTweet(searches.results[i], function(err, tweet) {
               self.addTweet(tweet)
             })
